@@ -13,17 +13,20 @@ See `LICENSE`.
 This project can display the following orthophoto background:
 
 - Dataset: ORTHO THR 06 : Orthophotographie très haute résolution du département des Alpes-Maritimes
-- Publisher: Région Sud / DataSud
+- Publisher / source: Région Sud / DataSud
 - Licence: Licence Ouverte / Open Licence 2.0
-- Source: DataSud
+- Dataset page:
+  https://www.datasud.fr/explorer/fr/jeux-de-donnees/orthophotographie-tres-haute-resolution-du-departement-des-alpes-maritimes/info
+- DataSud open data information page:
+  https://www.datasud.fr/portal/donnee/
 - COG URL currently used by the application:
   https://imageries.datasud.fr/cog/orthothr/ORTHOTHR_RVB_0M05_COG_L93_D06_2024.tif
 
-Attribution to display:
+Attribution used in the application:
 
-Fond orthophoto : ORTHO THR 06, Région Sud / DataSud, Licence Ouverte 2.0.
+> Fond orthophoto : ORTHO THR 06, Région Sud / DataSud, Licence Ouverte 2.0.
 
-TODO: add the exact last update date from the DataSud dataset page before public production use.
+Important: before public production use, add the exact last update date from the DataSud dataset page, as required by Licence Ouverte / Open Licence 2.0.
 
 ## Main third-party software
 
@@ -31,8 +34,3 @@ TODO: add the exact last update date from the DataSud dataset page before public
 - React: MIT License
 - OpenLayers: BSD-2-Clause License
 - Proj4js: MIT License
-
-Future backend components:
-
-- FastAPI: MIT License
-- TiTiler: MIT License

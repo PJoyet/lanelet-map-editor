@@ -1,59 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lanelet Map Editor
 
-## Getting Started
+Prototype d'interface web pour l'affichage et l'édition future de cartes Lanelet2 sur fond orthophoto.
 
-First, run the development server:
+Le projet est actuellement centré sur une interface minimale :
+
+- affichage d'une orthophoto COG DataSud avec OpenLayers ;
+- centrage initial sur une BBox Lambert-93 / EPSG:2154 ;
+- menu `File` ;
+- sélection locale d'un fichier Lanelet `.osm` côté navigateur.
+
+L'import Lanelet2 n'est pas encore parsé : le fichier sélectionné est uniquement lu côté navigateur et affiché dans la console.
+
+## Stack
+
+- Next.js
+- React
+- TypeScript
+- OpenLayers
+- Proj4js
+
+## Requirements
+
+- Node.js >= 20.9.0
+- npm
+
+## Installation
+
+```bash
+npm install
+```
+
+## Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Puis ouvrir :
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Build
 
-## Learn More
+```bash
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Orthophoto background
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The orthophoto background currently used by the prototype is:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**ORTHO THR 06 : Orthophotographie très haute résolution du département des Alpes-Maritimes**, Région Sud / DataSud.
 
-## Deploy on Vercel
+COG URL currently used by the application:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```text
+https://imageries.datasud.fr/cog/orthothr/ORTHOTHR_RVB_0M05_COG_L93_D06_2024.tif
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The application loads the COG directly in the browser through OpenLayers.
+
+The GDAL `/vsicurl/...` syntax is not used in the frontend.
+
+## Data attribution
+
+License: **Licence Ouverte / Open Licence 2.0**.
+
+Attribution displayed in the application:
+
+> Fond orthophoto : ORTHO THR 06, Région Sud / DataSud, Licence Ouverte 2.0.
+
+Dataset page:
+
+```text
+https://www.datasud.fr/explorer/fr/jeux-de-donnees/orthophotographie-tres-haute-resolution-du-departement-des-alpes-maritimes/info
+```
+
+DataSud open data information page:
+
+```text
+https://www.datasud.fr/portal/donnee
+```
+
+Important: before public production use, add the exact last update date from the DataSud dataset page, as required by Licence Ouverte / Open Licence 2.0.
 
 ## License
 
 The source code of this project is licensed under the MIT License.
 
 See [`LICENSE`](./LICENSE).
-
-## Data attribution
-
-The orthophoto background currently used by the prototype is:
-
-**ORTHO THR 06 : Orthophotographie très haute résolution du département des Alpes-Maritimes**, Région Sud / DataSud.
-
-License: **Licence Ouverte / Open Licence 2.0**.
-
-Attribution:
-
-> Fond orthophoto : ORTHO THR 06, Région Sud / DataSud, Licence Ouverte 2.0.
-
-Before production use, add the exact last update date from the DataSud dataset page.
 
 ## Third-party notices
 

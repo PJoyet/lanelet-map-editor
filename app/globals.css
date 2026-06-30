@@ -108,3 +108,8 @@ button {
     color: #111827;
     font-size: 11px;
 }
+
+.map-attribution a {
+    color: #1d4ed8;
+    text-decoration: underline;
+}

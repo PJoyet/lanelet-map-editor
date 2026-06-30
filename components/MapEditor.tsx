@@ -186,7 +186,15 @@ export default function MapEditor() {
             <section ref={mapElementRef} className="map" />
 
             <div className="map-attribution">
-                Fond orthophoto : ORTHO THR 06, Région Sud / DataSud, Licence Ouverte 2.0
+                Fond orthophoto :{" "}
+                <a
+                    href="https://www.datasud.fr/explorer/fr/jeux-de-donnees/orthophotographie-tres-haute-resolution-du-departement-des-alpes-maritimes/info"
+                    target="_blank"
+                    rel="noreferrer"
+                >
+                    ORTHO THR 06
+                </a>
+                {", Région Sud / DataSud, Licence Ouverte 2.0"}
             </div>
         </main>
     );
