@@ -118,7 +118,9 @@ export default function MapEditor() {
         fileInputRef.current?.click();
     }
 
-    async function handleLaneletFileChange(event: ChangeEvent<HTMLInputElement>): Promise<void> {
+    async function handleLaneletFileChange(
+        event: ChangeEvent<HTMLInputElement>,
+    ): Promise<void> {
         const file = event.target.files?.[0];
 
         if (!file) {
@@ -146,6 +148,7 @@ export default function MapEditor() {
                 <div className="menu-root">
                     <button
                         className="menu-button"
+                        type="button"
                         onClick={() => setIsFileMenuOpen((value) => !value)}
                     >
                         File
@@ -153,7 +156,10 @@ export default function MapEditor() {
 
                     {isFileMenuOpen && (
                         <div className="menu-dropdown">
-                            <button onClick={openLaneletImportDialog}>
+                            <button
+                                type="button"
+                                onClick={openLaneletImportDialog}
+                            >
                                 Import Lanelet (.osm)
                             </button>
                         </div>
