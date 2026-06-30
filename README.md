@@ -34,3 +34,27 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## License
+
+The source code of this project is licensed under the MIT License.
+
+See [`LICENSE`](./LICENSE).
+
+## Data attribution
+
+The orthophoto background currently used by the prototype is:
+
+**ORTHO THR 06 : Orthophotographie très haute résolution du département des Alpes-Maritimes**, Région Sud / DataSud.
+
+License: **Licence Ouverte / Open Licence 2.0**.
+
+Attribution:
+
+> Fond orthophoto : ORTHO THR 06, Région Sud / DataSud, Licence Ouverte 2.0.
+
+Before production use, add the exact last update date from the DataSud dataset page.
+
+## Third-party notices
+
+See [`NOTICE.md`](./NOTICE.md).

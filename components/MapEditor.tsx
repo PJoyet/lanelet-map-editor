@@ -178,6 +178,10 @@ export default function MapEditor() {
             </header>
 
             <section ref={mapElementRef} className="map" />
+
+            <div className="map-attribution">
+                Fond orthophoto : ORTHO THR 06, Région Sud / DataSud, Licence Ouverte 2.0
+            </div>
         </main>
     );
 }
