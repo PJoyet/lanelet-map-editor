@@ -7,9 +7,10 @@ Le projet est actuellement centré sur une interface minimale :
 - affichage d'une orthophoto COG DataSud avec OpenLayers ;
 - centrage initial sur une BBox Lambert-93 / EPSG:2154 ;
 - menu `File` ;
-- sélection locale d'un fichier Lanelet `.osm` côté navigateur.
+- sélection locale en deux étapes : d'abord le fichier Lanelet `.osm`, puis `map_projector_info.yaml` ;
+- affichage client des géométries Lanelet importées avec recadrage automatique de la vue.
 
-L'import Lanelet2 n'est pas encore parsé : le fichier sélectionné est uniquement lu côté navigateur et affiché dans la console.
+Le fichier `map_projector_info.yaml` est vérifié à l'import. Les géométries sont actuellement lues depuis les coordonnées WGS84 du `.osm` et affichées au-dessus de l'orthophoto.
 
 ## Stack
 
