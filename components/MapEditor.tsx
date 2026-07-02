@@ -22,15 +22,13 @@ import VectorSource from "ol/source/Vector.js";
 
 import { transform, transformExtent } from "ol/proj.js";
 import { register } from "ol/proj/proj4.js";
-import { Stroke, Style } from "ol/style.js";
+import { Fill, Stroke, Style } from "ol/style.js";
 
 import LaneletImportDialog from "@/components/lanelet/LaneletImportDialog";
+import { parseLaneletAreaSource, parseLaneletSource } from "@/components/lanelet/importSession";
 import {
     LANELET_SESSION_STORAGE_KEY,
     exportImportSession,
-    hasImportSession,
-    parseLaneletSource,
-    parseProjectorInfo,
     persistCurrentView,
     readImportSession,
     writeImportSession,
@@ -59,6 +57,16 @@ const laneletStyle = new Style({
     }),
 });
 
+const laneletAreaStyle = new Style({
+    fill: new Fill({
+        color: "rgba(0, 153, 255, 0.03)",
+    }),
+    stroke: new Stroke({
+        color: "rgba(0, 153, 255, 0.25)",
+        width: 1,
+    }),
+});
+
 proj4.defs(
     "EPSG:2154",
     "+proj=lcc +lat_1=49 +lat_2=44 +lat_0=46.5 +lon_0=3 " +
@@ -66,46 +74,54 @@ proj4.defs(
         "+towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
 );
 
+proj4.defs(
+    "EPSG:3857",
+    "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 " +
+        "+x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +type=crs",
+);
+
 register(proj4);
 
+const MAP_INFO = {
+    source: "ORTHO THR 06",
+    crs: "EPSG:2154 / EPSG:3857",
+    zoom: 18,
+    label: "Carte",
+};
+
+const TOOL_ITEMS = [
+    { label: "Sélection", icon: "◌" },
+    { label: "Navigation", icon: "↕" },
+    { label: "Dessin", icon: "✦" },
+    { label: "Mesure", icon: "⌁" },
+    { label: "Calques", icon: "▦" },
+];
 export default function MapEditor() {
     const mapElementRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<OlMap | null>(null);
     const laneletLayerRef = useRef<VectorLayer<VectorSource<Feature<Geometry>>> | null>(null);
+    const laneletAreaLayerRef = useRef<VectorLayer<VectorSource<Feature<Geometry>>> | null>(null);
     const laneletFileInputRef = useRef<HTMLInputElement | null>(null);
-    const projectorFileInputRef = useRef<HTMLInputElement | null>(null);
 
-    const [isFileMenuOpen, setIsFileMenuOpen] = useState(false);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [pendingLaneletFile, setPendingLaneletFile] = useState<File | null>(null);
-    const [pendingProjectorFile, setPendingProjectorFile] = useState<File | null>(null);
     const [isImportingLanelet, setIsImportingLanelet] = useState(false);
-    const [hasExportableSession, setHasExportableSession] = useState(false);
-    const [status, setStatus] = useState("Initialisation...");
 
     const applyLaneletImport = useCallback((
         laneletContent: string,
-        projectorContent: string,
         options?: {
             laneletFileName: string;
-            projectorFileName: string;
             persistedViewCenter?: [number, number];
             persistedViewZoom?: number;
         },
     ): void => {
-        const projectorInfo = parseProjectorInfo(projectorContent);
         const laneletSource = parseLaneletSource(laneletContent);
+        const laneletAreaSource = parseLaneletAreaSource(laneletContent);
         const laneletExtent = laneletSource.getExtent();
 
         laneletLayerRef.current?.setSource(laneletSource);
+        laneletAreaLayerRef.current?.setSource(laneletAreaSource);
 
-        const projectorSummary = projectorInfo.mgrsGrid
-            ? `${projectorInfo.projectorType}, ${projectorInfo.mgrsGrid}`
-            : projectorInfo.projectorType;
-
-        const nextStatus = `Lanelet chargé : ${laneletSource.getFeatures().length} géométries (${projectorSummary}).`;
-
-        setStatus(nextStatus);
 
         if (mapRef.current) {
             if (options?.persistedViewCenter && options.persistedViewZoom !== undefined) {
@@ -122,9 +138,7 @@ export default function MapEditor() {
             writeImportSession({
                 laneletContent,
                 laneletFileName: options?.laneletFileName ?? "lanelet.osm",
-                projectorContent,
-                projectorFileName: options?.projectorFileName ?? "map_projector_info.yaml",
-                status: nextStatus,
+                status: `Lanelet chargé : ${laneletSource.getFeatures().length} géométries.`,
                 viewCenter: mapRef.current.getView().getCenter() as [number, number] | undefined,
                 viewZoom: mapRef.current.getView().getZoom(),
             });
@@ -135,18 +149,54 @@ export default function MapEditor() {
         const importSession = readImportSession();
 
         if (!importSession) {
-            setStatus("Aucune session Lanelet à exporter.");
-            setHasExportableSession(false);
             return;
         }
 
         exportImportSession(importSession);
-        setStatus("Session Lanelet exportée.");
     }, []);
 
-    const closeFileMenu = useCallback(() => {
-        setIsFileMenuOpen(false);
+    const openLaneletImportDialog = useCallback(() => {
+        setIsImportDialogOpen(true);
+        setPendingLaneletFile(null);
     }, []);
+
+    const closeLaneletImportDialog = useCallback(() => {
+        setIsImportDialogOpen(false);
+        setPendingLaneletFile(null);
+    }, []);
+
+    const handleLaneletFileSelection = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+        const laneletFile = event.target.files?.[0];
+
+        if (!laneletFile) {
+            return;
+        }
+
+        setPendingLaneletFile(laneletFile);
+        event.target.value = "";
+    }, []);
+
+    const importPendingLaneletFiles = useCallback(async () => {
+        if (!pendingLaneletFile) {
+            return;
+        }
+
+        setIsImportingLanelet(true);
+
+        try {
+            const laneletContent = await pendingLaneletFile.text();
+
+            applyLaneletImport(laneletContent, {
+                laneletFileName: pendingLaneletFile.name,
+            });
+
+            closeLaneletImportDialog();
+        } catch (error: unknown) {
+            console.error(error);
+        } finally {
+            setIsImportingLanelet(false);
+        }
+    }, [applyLaneletImport, closeLaneletImportDialog, pendingLaneletFile]);
 
     useEffect(() => {
         if (!mapElementRef.current || mapRef.current) {
@@ -154,18 +204,12 @@ export default function MapEditor() {
         }
 
         const orthoSource = new GeoTIFF({
-            sources: [
-                {
-                    url: ORTHO_THR_06_COG_URL,
-                },
-            ],
+            sources: [{ url: ORTHO_THR_06_COG_URL }],
             convertToRGB: true,
             interpolate: true,
         });
 
-        const rasterLayer = new WebGLTileLayer({
-            source: orthoSource,
-        });
+        const rasterLayer = new WebGLTileLayer({ source: orthoSource });
 
         const laneletLayer = new VectorLayer({
             source: new VectorSource(),
@@ -173,21 +217,19 @@ export default function MapEditor() {
             zIndex: 10,
         });
 
-        const initialCenter = transform(
-            INITIAL_CENTER_EPSG_2154,
-            "EPSG:2154",
-            "EPSG:3857",
-        );
+        const laneletAreaLayer = new VectorLayer({
+            source: new VectorSource(),
+            style: laneletAreaStyle,
+            zIndex: 9,
+            opacity: 0.25,
+        });
 
-        const initialExtent = transformExtent(
-            INITIAL_BBOX_EPSG_2154,
-            "EPSG:2154",
-            "EPSG:3857",
-        );
+        const initialCenter = transform(INITIAL_CENTER_EPSG_2154, "EPSG:2154", "EPSG:3857");
+        const initialExtent = transformExtent(INITIAL_BBOX_EPSG_2154, "EPSG:2154", "EPSG:3857");
 
         const map = new OlMap({
             target: mapElementRef.current,
-            layers: [rasterLayer, laneletLayer],
+            layers: [rasterLayer, laneletAreaLayer, laneletLayer],
             view: new View({
                 center: initialCenter,
                 zoom: 18,
@@ -196,7 +238,7 @@ export default function MapEditor() {
 
         mapRef.current = map;
         laneletLayerRef.current = laneletLayer;
-        setHasExportableSession(hasImportSession());
+        laneletAreaLayerRef.current = laneletAreaLayer;
 
         const restoreImportedSession = () => {
             const importSession = readImportSession();
@@ -206,9 +248,8 @@ export default function MapEditor() {
             }
 
             try {
-                applyLaneletImport(importSession.laneletContent, importSession.projectorContent, {
+                applyLaneletImport(importSession.laneletContent, {
                     laneletFileName: importSession.laneletFileName,
-                    projectorFileName: importSession.projectorFileName,
                     persistedViewCenter: importSession.viewCenter,
                     persistedViewZoom: importSession.viewZoom,
                 });
@@ -217,6 +258,8 @@ export default function MapEditor() {
                 sessionStorage.removeItem(LANELET_SESSION_STORAGE_KEY);
             }
         };
+
+        restoreImportedSession();
 
         map.on("moveend", () => {
             const importSession = readImportSession();
@@ -228,6 +271,12 @@ export default function MapEditor() {
             persistCurrentView(importSession, map);
         });
 
+        const resizeObserver = new ResizeObserver(() => {
+            map.updateSize();
+        });
+
+        resizeObserver.observe(mapElementRef.current);
+
         orthoSource
             .getView()
             .then(() => {
@@ -237,195 +286,70 @@ export default function MapEditor() {
                         maxZoom: 20,
                         duration: 0,
                     });
-
-                    restoreImportedSession();
                 });
-
-                setStatus("Carte chargée.");
             })
             .catch((error: unknown) => {
                 console.error(error);
-                setStatus("Erreur de chargement de l’orthophoto.");
             });
 
         return () => {
+            resizeObserver.disconnect();
             map.setTarget(undefined);
             mapRef.current = null;
             laneletLayerRef.current = null;
+            laneletAreaLayerRef.current = null;
         };
-    }, [applyLaneletImport]);
-
-    function openLaneletImportDialog(): void {
-        setIsFileMenuOpen(false);
-        setIsImportDialogOpen(true);
-        setPendingLaneletFile(null);
-        setPendingProjectorFile(null);
-    }
-
-    function closeLaneletImportDialog(): void {
-        setIsImportDialogOpen(false);
-        setPendingLaneletFile(null);
-        setPendingProjectorFile(null);
-    }
-
-    function handleLaneletFileSelection(
-        event: ChangeEvent<HTMLInputElement>,
-    ): void {
-        const laneletFile = event.target.files?.[0];
-
-        if (!laneletFile) {
-            return;
-        }
-
-        if (!/\.(osm|xml)$/i.test(laneletFile.name)) {
-            setStatus("Sélectionnez un fichier Lanelet .osm ou .xml.");
-            event.target.value = "";
-            return;
-        }
-
-        setPendingLaneletFile(laneletFile);
-        setStatus(`Fichier Lanelet sélectionné : ${laneletFile.name}.`);
-        event.target.value = "";
-    }
-
-    function handleProjectorFileSelection(
-        event: ChangeEvent<HTMLInputElement>,
-    ): void {
-        const projectorFile = event.target.files?.[0];
-
-        if (!projectorFile) {
-            return;
-        }
-
-        if (!/map_projector_info\.(yaml|yml)$/i.test(projectorFile.name)) {
-            setStatus("Sélectionnez le fichier map_projector_info.yaml.");
-            event.target.value = "";
-            return;
-        }
-
-        setPendingProjectorFile(projectorFile);
-        setStatus(`Fichier projector sélectionné : ${projectorFile.name}.`);
-        event.target.value = "";
-    }
-
-    async function importPendingLaneletFiles(): Promise<void> {
-        if (!pendingLaneletFile) {
-            setStatus("Sélectionnez d'abord un fichier Lanelet .osm.");
-            return;
-        }
-
-        if (!pendingProjectorFile) {
-            setStatus("Sélectionnez le fichier map_projector_info.yaml.");
-            return;
-        }
-
-        setIsImportingLanelet(true);
-
-        try {
-            const [laneletContent, projectorContent] = await Promise.all([
-                pendingLaneletFile.text(),
-                pendingProjectorFile.text(),
-            ]);
-
-            applyLaneletImport(laneletContent, projectorContent, {
-                laneletFileName: pendingLaneletFile.name,
-                projectorFileName: pendingProjectorFile.name,
-            });
-
-            closeLaneletImportDialog();
-        } catch (error: unknown) {
-            console.error(error);
-            setStatus(
-                error instanceof Error
-                    ? error.message
-                    : "Erreur de lecture des fichiers Lanelet.",
-            );
-        } finally {
-            setIsImportingLanelet(false);
-        }
-    }
+    }, []);
 
     return (
         <main className="map-editor">
-            <header className="topbar">
-                <div className="menu-root">
-                    <button
-                        className="menu-button"
-                        type="button"
-                        onClick={() => setIsFileMenuOpen((value) => !value)}
-                    >
-                        File
+            <header className="map-editor__topbar" aria-label="Barre de navigation">
+                <div className="topbar-actions">
+                    <button type="button" className="topbar-button topbar-button--primary" onClick={openLaneletImportDialog}>
+                        Import Lanelet
                     </button>
-
-                    {isFileMenuOpen && (
-                        <div className="menu-dropdown menu-dropdown--grouped">
-                            <div className="menu-section">
-                                <div className="menu-section-title">IMPORT</div>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        openLaneletImportDialog();
-                                        closeFileMenu();
-                                    }}
-                                >
-                                    Import Lanelet2 map
-                                </button>
-                            </div>
-
-                            <div className="menu-section">
-                                <div className="menu-section-title">EXPORT</div>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        handleExportLaneletSession();
-                                        closeFileMenu();
-                                    }}
-                                    disabled={!hasExportableSession}
-                                >
-                                    Export Lanelet2Maps
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="app-title">
-                    Lanelet Editor
-                </div>
-
-                <div className="status">
-                    {status}
+                    <button type="button" className="topbar-button" onClick={handleExportLaneletSession}>
+                        Export Lanelet
+                    </button>
                 </div>
             </header>
+
+            <aside className="map-editor__rail map-editor__rail--left" aria-label="Outils">
+                <div />
+            </aside>
+
+            <aside className="map-editor__rail map-editor__rail--right" aria-label="Navigation et paramètres">
+                <div />
+            </aside>
+            <div className="map-editor__stage">
+                <div className="map-editor__stage-frame">
+                    <section ref={mapElementRef} className="map" aria-label="Carte Lanelet" />
+                </div>
+            </div>
 
             <LaneletImportDialog
                 isOpen={isImportDialogOpen}
                 laneletFileName={pendingLaneletFile?.name ?? null}
-                projectorFileName={pendingProjectorFile?.name ?? null}
                 isImporting={isImportingLanelet}
-                canExport={hasExportableSession}
                 laneletFileInputRef={laneletFileInputRef}
-                projectorFileInputRef={projectorFileInputRef}
                 onClose={closeLaneletImportDialog}
                 onImport={importPendingLaneletFiles}
-                onExport={handleExportLaneletSession}
                 onLaneletFileSelection={handleLaneletFileSelection}
-                onProjectorFileSelection={handleProjectorFileSelection}
             />
 
-            <section ref={mapElementRef} className="map" />
-
-            <div className="map-attribution">
-                Fond orthophoto :{" "}
-                <a
-                    href="https://www.datasud.fr/explorer/fr/jeux-de-donnees/orthophotographie-tres-haute-resolution-du-departement-des-alpes-maritimes/info"
-                    target="_blank"
-                    rel="noreferrer"
-                >
-                    ORTHO THR 06
-                </a>
-                {", Région Sud / DataSud, Licence Ouverte 2.0"}
-            </div>
+            <footer className="map-footer" aria-label="Informations de la carte">
+                <span className="map-footer__attribution">
+                    Fond orthophoto : {" "}
+                    <a
+                        href="https://www.datasud.fr/explorer/fr/jeux-de-donnees/orthophotographie-tres-haute-resolution-du-departement-des-alpes-maritimes/info"
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        ORTHO THR 06
+                    </a>
+                    {", Région Sud / DataSud, Licence Ouverte 2.0"}
+                </span>
+            </footer>
         </main>
     );
 }

@@ -3,31 +3,21 @@ import type { ChangeEvent, RefObject } from "react";
 type LaneletImportDialogProps = {
     isOpen: boolean;
     laneletFileName: string | null;
-    projectorFileName: string | null;
     isImporting: boolean;
-    canExport: boolean;
     laneletFileInputRef: RefObject<HTMLInputElement | null>;
-    projectorFileInputRef: RefObject<HTMLInputElement | null>;
     onClose: () => void;
     onImport: () => void;
-    onExport: () => void;
     onLaneletFileSelection: (event: ChangeEvent<HTMLInputElement>) => void;
-    onProjectorFileSelection: (event: ChangeEvent<HTMLInputElement>) => void;
 };
 
 export default function LaneletImportDialog({
     isOpen,
     laneletFileName,
-    projectorFileName,
     isImporting,
-    canExport,
     laneletFileInputRef,
-    projectorFileInputRef,
     onClose,
     onImport,
-    onExport,
     onLaneletFileSelection,
-    onProjectorFileSelection,
 }: LaneletImportDialogProps) {
     if (!isOpen) {
         return null;
@@ -41,20 +31,24 @@ export default function LaneletImportDialog({
                 </header>
 
                 <div className="import-dialog-body">
-                    <div className="import-file-block">
-                        <div className="import-file-label">Lanelet map (.osm)</div>
-                        <div className="import-file-picker-row">
-                            <button
-                                type="button"
-                                className="import-browse-button"
-                                onClick={() => laneletFileInputRef.current?.click()}
-                            >
-                                Browse...
-                            </button>
-                            <div className="import-file-name">
-                                {laneletFileName ?? "No file selected."}
-                            </div>
+                    <div className="import-file-block import-file-block-inline">
+                        <button
+                            type="button"
+                            className="import-browse-button"
+                            onClick={() => laneletFileInputRef.current?.click()}
+                        >
+                            Browse...
+                        </button>
+                        <div className="import-file-name">
+                            {laneletFileName ?? "No file selected."}
                         </div>
+                    </div>
+
+                    <div className="import-preview-panel" aria-hidden="true" />
+
+                    <div className="import-selection-actions">
+                        <button type="button" className="import-mini-button">Select all</button>
+                        <button type="button" className="import-mini-button">Deselect all</button>
                     </div>
 
                     <label className="import-checkbox-row">
@@ -67,37 +61,9 @@ export default function LaneletImportDialog({
                         <span>Import as read only</span>
                     </label>
 
-                    <label className="import-checkbox-row">
-                        <input type="checkbox" checked readOnly />
-                        <span>Import map projector info</span>
-                    </label>
-
-                    <div className="import-file-block import-file-block-projector">
-                        <div className="import-projector-caption">map_projector_info.yaml</div>
-                        <div className="import-file-picker-row">
-                            <button
-                                type="button"
-                                className="import-browse-button"
-                                onClick={() => projectorFileInputRef.current?.click()}
-                            >
-                                Browse...
-                            </button>
-                            <div className="import-file-name">
-                                {projectorFileName ?? "No file selected."}
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 <footer className="import-dialog-footer">
-                    <button
-                        type="button"
-                        className="import-export-button"
-                        onClick={onExport}
-                        disabled={!canExport}
-                    >
-                        Export
-                    </button>
                     <button
                         type="button"
                         className="import-cancel-button"
@@ -124,13 +90,6 @@ export default function LaneletImportDialog({
                     onChange={onLaneletFileSelection}
                 />
 
-                <input
-                    ref={projectorFileInputRef}
-                    type="file"
-                    accept=".yaml,.yml"
-                    className="hidden-file-input"
-                    onChange={onProjectorFileSelection}
-                />
             </section>
         </div>
     );

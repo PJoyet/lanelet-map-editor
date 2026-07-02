@@ -1,59 +1,22 @@
 import Feature from "ol/Feature.js";
 import type Geometry from "ol/geom/Geometry.js";
+import Polygon from "ol/geom/Polygon.js";
 import LineString from "ol/geom/LineString.js";
 import type OlMap from "ol/Map.js";
 import VectorSource from "ol/source/Vector.js";
 
 export const LANELET_SESSION_STORAGE_KEY = "lanelet-editor.import-session";
 
+let cachedSessionRaw: string | null | undefined;
+let cachedSessionValue: LaneletImportSession | null | undefined;
+
 export type LaneletImportSession = {
     laneletContent: string;
     laneletFileName: string;
-    projectorContent: string;
-    projectorFileName: string;
     status: string;
     viewCenter?: [number, number];
     viewZoom?: number;
 };
-
-export type ProjectorInfo = {
-    projectorType: string;
-    verticalDatum?: string;
-    mgrsGrid?: string;
-};
-
-export function parseProjectorInfo(content: string): ProjectorInfo {
-    const entries = content
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !line.startsWith("#"))
-        .map((line) => {
-            const separatorIndex = line.indexOf(":");
-
-            if (separatorIndex === -1) {
-                return null;
-            }
-
-            const key = line.slice(0, separatorIndex).trim();
-            const value = line.slice(separatorIndex + 1).trim();
-
-            return [key, value] as const;
-        })
-        .filter((entry): entry is readonly [string, string] => entry !== null);
-
-    const values = new Map(entries);
-    const projectorType = values.get("projector_type");
-
-    if (!projectorType) {
-        throw new Error("Le fichier map_projector_info.yaml ne contient pas projector_type.");
-    }
-
-    return {
-        projectorType,
-        verticalDatum: values.get("vertical_datum"),
-        mgrsGrid: values.get("mgrs_grid"),
-    };
-}
 
 export function parseLaneletSource(content: string): VectorSource<Feature<Geometry>> {
     const document = new DOMParser().parseFromString(content, "application/xml");
@@ -79,6 +42,7 @@ export function parseLaneletSource(content: string): VectorSource<Feature<Geomet
     const features: Feature<Geometry>[] = [];
 
     for (const wayElement of Array.from(document.getElementsByTagName("way"))) {
+        const wayId = wayElement.getAttribute("id") ?? undefined;
         const coordinates = Array.from(wayElement.getElementsByTagName("nd"))
             .map((nodeRefElement) => nodeRefElement.getAttribute("ref"))
             .flatMap((nodeRef) => {
@@ -98,7 +62,13 @@ export function parseLaneletSource(content: string): VectorSource<Feature<Geomet
         const geometry = new LineString(coordinates);
         geometry.transform("EPSG:4326", "EPSG:3857");
 
-        features.push(new Feature({ geometry }));
+        const feature = new Feature({ geometry });
+
+        if (wayId) {
+            feature.setId(wayId);
+        }
+
+        features.push(feature);
     }
 
     if (features.length === 0) {
@@ -110,23 +80,169 @@ export function parseLaneletSource(content: string): VectorSource<Feature<Geomet
     });
 }
 
+export function parseLaneletAreaSource(content: string): VectorSource<Feature<Geometry>> {
+    const document = new DOMParser().parseFromString(content, "application/xml");
+
+    if (document.getElementsByTagName("parsererror").length > 0) {
+        throw new Error("Le fichier Lanelet .osm n'est pas un XML valide.");
+    }
+
+    const nodeCoordinates = new Map<string, [number, number]>();
+    const wayCoordinates = new Map<string, [number, number][]>();
+
+    for (const nodeElement of Array.from(document.getElementsByTagName("node"))) {
+        const id = nodeElement.getAttribute("id");
+        const lat = Number.parseFloat(nodeElement.getAttribute("lat") ?? "");
+        const lon = Number.parseFloat(nodeElement.getAttribute("lon") ?? "");
+
+        if (!id || Number.isNaN(lat) || Number.isNaN(lon)) {
+            continue;
+        }
+
+        nodeCoordinates.set(id, [lon, lat]);
+    }
+
+    for (const wayElement of Array.from(document.getElementsByTagName("way"))) {
+        const wayId = wayElement.getAttribute("id");
+        const coordinates = Array.from(wayElement.getElementsByTagName("nd"))
+            .map((nodeRefElement) => nodeRefElement.getAttribute("ref"))
+            .flatMap((nodeRef) => {
+                if (!nodeRef) {
+                    return [];
+                }
+
+                const coordinate = nodeCoordinates.get(nodeRef);
+
+                return coordinate ? [coordinate] : [];
+            });
+
+        if (wayId && coordinates.length >= 2) {
+            wayCoordinates.set(wayId, coordinates);
+        }
+    }
+
+    const features: Feature<Geometry>[] = [];
+
+    const isLaneletRelation = (relationElement: Element): boolean => {
+        const tags = Array.from(relationElement.getElementsByTagName("tag"));
+
+        return tags.some((tagElement) => {
+            const key = tagElement.getAttribute("k");
+            const value = tagElement.getAttribute("v");
+
+            return (key === "type" && value === "lanelet") || (key === "subtype" && value === "road");
+        });
+    };
+
+    const getRelationMemberRef = (relationElement: Element, roles: string[]): string | undefined => {
+        for (const memberElement of Array.from(relationElement.getElementsByTagName("member"))) {
+            const role = memberElement.getAttribute("role") ?? "";
+
+            if (roles.includes(role)) {
+                return memberElement.getAttribute("ref") ?? undefined;
+            }
+        }
+
+        return undefined;
+    };
+
+    for (const relationElement of Array.from(document.getElementsByTagName("relation"))) {
+        if (!isLaneletRelation(relationElement)) {
+            continue;
+        }
+
+        const leftWayId = getRelationMemberRef(relationElement, ["left", "left_bound", "outer_left"]);
+        const rightWayId = getRelationMemberRef(relationElement, ["right", "right_bound", "outer_right"]);
+
+        const leftCoordinates = leftWayId ? wayCoordinates.get(leftWayId) : undefined;
+        const rightCoordinates = rightWayId ? wayCoordinates.get(rightWayId) : undefined;
+
+        if (!leftCoordinates || !rightCoordinates || leftCoordinates.length < 2 || rightCoordinates.length < 2) {
+            continue;
+        }
+
+        const leftRing = [...leftCoordinates];
+        const rightRing = [...rightCoordinates].reverse();
+
+        if (leftRing.length > 0 && rightRing.length > 0) {
+            const firstLeft = leftRing[0];
+            const lastLeft = leftRing[leftRing.length - 1];
+            const firstRight = rightRing[0];
+            const lastRight = rightRing[rightRing.length - 1];
+
+            if (lastLeft[0] !== firstRight[0] || lastLeft[1] !== firstRight[1]) {
+                leftRing.push(firstRight);
+            }
+
+            if (lastRight[0] !== firstLeft[0] || lastRight[1] !== firstLeft[1]) {
+                rightRing.push(firstLeft);
+            }
+        }
+
+        const polygonRing = [...leftRing, ...rightRing];
+
+        if (polygonRing.length < 4) {
+            continue;
+        }
+
+        const polygon = new Polygon([polygonRing]);
+        polygon.transform("EPSG:4326", "EPSG:3857");
+
+        const feature = new Feature({ geometry: polygon });
+        const relationId = relationElement.getAttribute("id");
+
+        if (relationId) {
+            feature.setId(`lanelet:${relationId}`);
+        }
+
+        features.push(feature);
+    }
+
+    return new VectorSource({
+        features,
+    });
+}
+
 export function readImportSession(): LaneletImportSession | null {
+    if (typeof window === "undefined") {
+        return null;
+    }
+
     const rawSession = sessionStorage.getItem(LANELET_SESSION_STORAGE_KEY);
 
+    if (rawSession === cachedSessionRaw && cachedSessionValue !== undefined) {
+        return cachedSessionValue;
+    }
+
     if (!rawSession) {
+        cachedSessionRaw = rawSession;
+        cachedSessionValue = null;
         return null;
     }
 
     try {
-        return JSON.parse(rawSession) as LaneletImportSession;
+        const parsedSession = JSON.parse(rawSession) as LaneletImportSession;
+        cachedSessionRaw = rawSession;
+        cachedSessionValue = parsedSession;
+        return parsedSession;
     } catch {
         sessionStorage.removeItem(LANELET_SESSION_STORAGE_KEY);
+        cachedSessionRaw = null;
+        cachedSessionValue = null;
         return null;
     }
 }
 
 export function writeImportSession(session: LaneletImportSession): void {
-    sessionStorage.setItem(LANELET_SESSION_STORAGE_KEY, JSON.stringify(session));
+    if (typeof window === "undefined") {
+        return;
+    }
+
+    const rawSession = JSON.stringify(session);
+    sessionStorage.setItem(LANELET_SESSION_STORAGE_KEY, rawSession);
+    cachedSessionRaw = rawSession;
+    cachedSessionValue = session;
+    window.dispatchEvent(new Event("lanelet-session-change"));
 }
 
 export function persistCurrentView(session: LaneletImportSession, map: OlMap): void {
@@ -146,7 +262,11 @@ export function persistCurrentView(session: LaneletImportSession, map: OlMap): v
 }
 
 export function hasImportSession(): boolean {
-    return sessionStorage.getItem(LANELET_SESSION_STORAGE_KEY) !== null;
+    if (typeof window === "undefined") {
+        return false;
+    }
+
+    return readImportSession() !== null;
 }
 
 function downloadTextFile(fileName: string, content: string): void {
@@ -166,5 +286,4 @@ function downloadTextFile(fileName: string, content: string): void {
 
 export function exportImportSession(session: LaneletImportSession): void {
     downloadTextFile(session.laneletFileName, session.laneletContent);
-    downloadTextFile(session.projectorFileName, session.projectorContent);
 }
